@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+.vscode/
+.idea/
+.DS_Store
+*.log
+
+# Artifacts model yang di-generate otomatis (jangan commit, biar auto-train)
+data/model_xgboost.pkl
+data/label_encoder.pkl
+data/fitur_polutan.pkl
+data/ispu_2024_clean.parquet
+data/metadata.json
+
+# Streamlit
+.streamlit/secrets.toml
