@@ -2,13 +2,12 @@
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.components import render_page_header
-from utils.data_loader import TANGGAL_ACUAN, load_data_2024
+from utils.components import _render_html, render_page_header
+from utils.data_loader import TANGGAL_ACUAN
 from utils.ispu_helper import KATEGORI_COLOR_BG, KATEGORI_RANGE
 
 
 def _chart_sumber_polusi() -> go.Figure:
-    """Donut chart sumber polusi Jakarta (data referensi)."""
     labels = ["Transportasi", "Industri", "Aktivitas Rumah Tangga", "Konstruksi", "Lainnya"]
     values = [45, 20, 15, 10, 10]
     colors = ["#2563EB", "#22C55E", "#FACC15", "#EF4444", "#A855F7"]
@@ -27,16 +26,12 @@ def _chart_sumber_polusi() -> go.Figure:
     )
     fig.update_layout(
         height=320, margin=dict(l=40, r=40, t=20, b=40),
-        showlegend=False,
-        font=dict(family="Inter, sans-serif"),
+        showlegend=False, font=dict(family="Inter, sans-serif"),
     )
     return fig
 
 
 def _chart_puncak_polusi() -> go.Figure:
-    """Chart pola harian pollusi (Jakarta-rata 24 jam)."""
-    import numpy as np
-
     hours = list(range(25))
     pola = [60, 50, 45, 40, 45, 55, 75, 90, 100, 95, 80, 75,
             70, 70, 75, 90, 110, 140, 155, 160, 145, 120, 95, 80, 75]
@@ -50,7 +45,6 @@ def _chart_puncak_polusi() -> go.Figure:
         fill="tozeroy", fillcolor="rgba(249, 115, 22, 0.12)",
         hovertemplate="<b>%{x}</b><br>ISPU: %{y}<extra></extra>",
     ))
-
     idx_max = pola.index(max(pola))
     fig.add_annotation(
         x=jam_labels[idx_max], y=pola[idx_max],
@@ -60,7 +54,6 @@ def _chart_puncak_polusi() -> go.Figure:
         font=dict(size=10, color="#0F172A"),
         bgcolor="#FFFFFF", bordercolor="#FED7AA", borderwidth=1, borderpad=6,
     )
-
     fig.update_layout(
         height=270, margin=dict(l=0, r=10, t=30, b=20),
         plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
@@ -82,14 +75,7 @@ def render():
     )
 
     # ─── Section 1: Mengenal ISPU (5 kategori cards) ────────────
-    st.markdown("""
-    <div class="card">
-        <h3 class="card-title">Mengenal ISPU (Indeks Standar Pencemar Udara)</h3>
-        <p style="font-size:13px; color:#64748B; margin:-8px 0 18px 0;">
-            ISPU digunakan untuk menggambarkan kualitas udara ambien di sekitar kita.
-        </p>
-    """, unsafe_allow_html=True)
-
+    # SATU HTML block lengkap - card + title + grid 5 kategori
     emoji_map = {
         "Baik": "😊", "Sedang": "😐", "Tidak Sehat": "😷",
         "Sangat Tidak Sehat": "😨", "Berbahaya": "😱",
@@ -102,136 +88,148 @@ def render():
         "Berbahaya": "Hindari semua aktivitas luar ruangan. Tetap di dalam ruangan.",
     }
 
-    cat_html = '<div class="edu-cat-row">'
+    cat_cards = []
     for nama, lo, hi, warna in KATEGORI_RANGE:
         bg = KATEGORI_COLOR_BG[nama]
         emoji = emoji_map[nama]
         desc = desc_map[nama]
         range_label = f"{lo} – {hi}" if hi < 500 else f"≥ {lo}"
-        cat_html += f"""
-        <div class="edu-cat-card" style="background:{bg};">
-            <div class="emoji">{emoji}</div>
-            <div class="range" style="color:{warna};">{range_label}</div>
-            <div class="nama" style="color:{warna};">{nama}</div>
-            <div class="desc">{desc}</div>
-        </div>
-        """
-    cat_html += "</div></div>"
-    st.markdown(cat_html, unsafe_allow_html=True)
+        cat_cards.append(
+            f'<div class="edu-cat-card" style="background:{bg};">'
+            f'<div class="emoji">{emoji}</div>'
+            f'<div class="range" style="color:{warna};">{range_label}</div>'
+            f'<div class="nama" style="color:{warna};">{nama}</div>'
+            f'<div class="desc">{desc}</div>'
+            f'</div>'
+        )
 
-    # ─── Section 2: 3 cards (Dampak | Sumber | Waktu Terburuk) ──
+    section1_html = (
+        '<div class="card">'
+        '<h3 class="card-title">Mengenal ISPU (Indeks Standar Pencemar Udara)</h3>'
+        '<p style="font-size:13px;color:#64748B;margin:-8px 0 18px 0;">'
+        'ISPU digunakan untuk menggambarkan kualitas udara ambien di sekitar kita.'
+        '</p>'
+        '<div class="edu-cat-row">' + "".join(cat_cards) + '</div>'
+        '</div>'
+    )
+    _render_html(section1_html)
+
+    # ─── Section 2: Dampak | Sumber | Waktu Terburuk ────────────
     col1, col2, col3 = st.columns(3, gap="medium")
 
+    # Kolom 1: Dampak Kesehatan - HTML murni, SATU block lengkap
     with col1:
-        st.markdown("""
-        <div class="card" style="height:100%;">
-            <h3 class="card-title">Dampak Kualitas Udara terhadap Kesehatan <span class="info-icon">i</span></h3>
-            <div style="display:flex; flex-direction:column; gap:14px; margin-top:8px;">
-                <div style="display:flex; gap:12px; align-items:flex-start;">
-                    <div style="font-size:28px;">🫁</div>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:#0F172A; font-family:'Plus Jakarta Sans',sans-serif;">Sistem Pernapasan</div>
-                        <div style="font-size:11px; color:#64748B; margin-top:2px; line-height:1.5;">
-                            Polusi udara dapat menyebabkan iritasi, batuk, sesak napas, dan memperparah asma.
-                        </div>
-                    </div>
-                </div>
-                <div style="display:flex; gap:12px; align-items:flex-start;">
-                    <div style="font-size:28px;">❤️</div>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:#0F172A; font-family:'Plus Jakarta Sans',sans-serif;">Sistem Kardiovaskular</div>
-                        <div style="font-size:11px; color:#64748B; margin-top:2px; line-height:1.5;">
-                            Paparan jangka panjang meningkatkan risiko penyakit jantung dan tekanan darah tinggi.
-                        </div>
-                    </div>
-                </div>
-                <div style="display:flex; gap:12px; align-items:flex-start;">
-                    <div style="font-size:28px;">👶</div>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:#0F172A; font-family:'Plus Jakarta Sans',sans-serif;">Anak-anak</div>
-                        <div style="font-size:11px; color:#64748B; margin-top:2px; line-height:1.5;">
-                            Anak lebih rentan terhadap infeksi pernapasan dan gangguan perkembangan paru-paru.
-                        </div>
-                    </div>
-                </div>
-                <div style="display:flex; gap:12px; align-items:flex-start;">
-                    <div style="font-size:28px;">👴</div>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:#0F172A; font-family:'Plus Jakarta Sans',sans-serif;">Lansia</div>
-                        <div style="font-size:11px; color:#64748B; margin-top:2px; line-height:1.5;">
-                            Risiko penyakit kronis meningkat, terutama jika memiliki riwayat penyakit.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        dampak_items = [
+            ("🫁", "Sistem Pernapasan",
+             "Polusi udara dapat menyebabkan iritasi, batuk, sesak napas, dan memperparah asma."),
+            ("❤️", "Sistem Kardiovaskular",
+             "Paparan jangka panjang meningkatkan risiko penyakit jantung dan tekanan darah tinggi."),
+            ("👶", "Anak-anak",
+             "Anak lebih rentan terhadap infeksi pernapasan dan gangguan perkembangan paru-paru."),
+            ("👴", "Lansia",
+             "Risiko penyakit kronis meningkat, terutama jika memiliki riwayat penyakit."),
+        ]
+        items_html = []
+        for icon, judul, desc in dampak_items:
+            items_html.append(
+                '<div style="display:flex;gap:12px;align-items:flex-start;">'
+                f'<div style="font-size:28px;flex-shrink:0;">{icon}</div>'
+                '<div>'
+                f'<div style="font-size:13px;font-weight:700;color:#0F172A;font-family:\'Plus Jakarta Sans\',sans-serif;">{judul}</div>'
+                f'<div style="font-size:11px;color:#64748B;margin-top:2px;line-height:1.5;">{desc}</div>'
+                '</div>'
+                '</div>'
+            )
 
+        col1_html = (
+            '<div class="card" style="height:100%;">'
+            '<h3 class="card-title">Dampak Kualitas Udara terhadap Kesehatan <span class="info-icon">i</span></h3>'
+            '<div style="display:flex;flex-direction:column;gap:14px;margin-top:8px;">'
+            + "".join(items_html)
+            + '</div>'
+            '</div>'
+        )
+        _render_html(col1_html)
+
+    # Kolom 2: Sumber Polusi - card pakai st.container(border) karena ada plotly chart
     with col2:
-        st.markdown("""
-        <div class="card" style="height:100%;">
-            <h3 class="card-title">Sumber Polusi Udara di Jakarta <span class="info-icon">i</span></h3>
-        """, unsafe_allow_html=True)
-        st.plotly_chart(_chart_sumber_polusi(), use_container_width=True,
-                        config={"displayModeBar": False})
-        st.markdown("""
-            <div style="font-size:11px; color:#64748B; line-height:1.5; margin-top:-8px;">
-                <b style="color:#0F172A;">Transportasi</b> menjadi penyumbang polusi udara terbesar di Jakarta.
-                Sumber: estimasi referensi penelitian kualitas udara DKI.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(border=True):
+            _render_html(
+                '<h3 style="font-size:16px;font-weight:700;color:#0F172A;margin:0 0 8px 0;'
+                'font-family:\'Plus Jakarta Sans\',sans-serif;">'
+                'Sumber Polusi Udara di Jakarta <span class="info-icon">i</span>'
+                '</h3>'
+            )
+            st.plotly_chart(_chart_sumber_polusi(), use_container_width=True,
+                            config={"displayModeBar": False})
+            _render_html(
+                '<div style="font-size:11px;color:#64748B;line-height:1.5;">'
+                '<b style="color:#0F172A;">Transportasi</b> menjadi penyumbang polusi udara terbesar di Jakarta. '
+                'Sumber: estimasi referensi penelitian kualitas udara DKI.'
+                '</div>'
+            )
 
+    # Kolom 3: Waktu Terburuk - card pakai st.container(border)
     with col3:
-        st.markdown("""
-        <div class="card" style="height:100%;">
-            <h3 class="card-title">Waktu dengan Kualitas Udara Terburuk <span class="info-icon">i</span></h3>
-        """, unsafe_allow_html=True)
-        st.plotly_chart(_chart_puncak_polusi(), use_container_width=True,
-                        config={"displayModeBar": False})
-        st.markdown("""
-            <div style="padding:10px 12px; background:#F0F9FF; border-radius:8px;
-                font-size:11px; color:#1E40AF; line-height:1.5; margin-top:-4px;">
-                💡 Kualitas udara cenderung memburuk pada sore hingga malam hari.
-                Sebaiknya batasi aktivitas luar ruangan pada waktu tersebut.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(border=True):
+            _render_html(
+                '<h3 style="font-size:16px;font-weight:700;color:#0F172A;margin:0 0 8px 0;'
+                'font-family:\'Plus Jakarta Sans\',sans-serif;">'
+                'Waktu dengan Kualitas Udara Terburuk <span class="info-icon">i</span>'
+                '</h3>'
+            )
+            st.plotly_chart(_chart_puncak_polusi(), use_container_width=True,
+                            config={"displayModeBar": False})
+            _render_html(
+                '<div style="padding:10px 12px;background:#F0F9FF;border-radius:8px;'
+                'font-size:11px;color:#1E40AF;line-height:1.5;">'
+                '💡 Kualitas udara cenderung memburuk pada sore hingga malam hari. '
+                'Sebaiknya batasi aktivitas luar ruangan pada waktu tersebut.'
+                '</div>'
+            )
 
     # ─── Section 3: Tips Kesehatan (5 cards) ────────────────────
-    st.markdown("""
-    <div class="card">
-        <h3 class="card-title">Tips Menjaga Kesehatan Saat Kualitas Udara Tidak Sehat <span class="info-icon">i</span></h3>
-    """, unsafe_allow_html=True)
-
+    # SATU HTML block lengkap dengan CSS grid internal
     tips = [
-        ("😷", "Gunakan Masker", "Gunakan masker berstandar yang dapat mengurangi paparan polusi udara."),
-        ("🏃", "Batasi Aktivitas Luar", "Kurangi aktivitas fisik berat di luar ruangan, terutama saat sore hingga malam hari."),
-        ("🪟", "Ventilasi yang Baik", "Tutup jendela saat polusi tinggi dan pastikan ventilasi rumah tetap berfungsi baik."),
-        ("💧", "Perbanyak Minum Air", "Minum air putih yang cukup untuk menjaga kebersihan saluran pernapasan."),
-        ("🌬️", "Gunakan Air Purifier", "Jika memungkinkan, gunakan alat penyaring udara di dalam ruangan untuk udara lebih bersih."),
+        ("😷", "Gunakan Masker",
+         "Gunakan masker berstandar yang dapat mengurangi paparan polusi udara."),
+        ("🏃", "Batasi Aktivitas Luar",
+         "Kurangi aktivitas fisik berat di luar ruangan, terutama saat sore hingga malam hari."),
+        ("🪟", "Ventilasi yang Baik",
+         "Tutup jendela saat polusi tinggi dan pastikan ventilasi rumah tetap berfungsi baik."),
+        ("💧", "Perbanyak Minum Air",
+         "Minum air putih yang cukup untuk menjaga kebersihan saluran pernapasan."),
+        ("🌬️", "Gunakan Air Purifier",
+         "Jika memungkinkan, gunakan alat penyaring udara di dalam ruangan untuk udara lebih bersih."),
     ]
-    cols = st.columns(5)
-    for col, (emoji, judul, desc) in zip(cols, tips):
-        with col:
-            st.markdown(f"""
-            <div style="padding:18px 14px; text-align:left; height:100%;">
-                <div style="font-size:36px; margin-bottom:10px;">{emoji}</div>
-                <div style="font-size:13px; font-weight:700; color:#0F172A;
-                    font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:6px;">{judul}</div>
-                <div style="font-size:11px; color:#64748B; line-height:1.5;">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    tip_cards = []
+    for emoji, judul, desc in tips:
+        tip_cards.append(
+            '<div style="padding:18px 14px;text-align:left;">'
+            f'<div style="font-size:36px;margin-bottom:10px;">{emoji}</div>'
+            f'<div style="font-size:13px;font-weight:700;color:#0F172A;font-family:\'Plus Jakarta Sans\',sans-serif;margin-bottom:6px;">{judul}</div>'
+            f'<div style="font-size:11px;color:#64748B;line-height:1.5;">{desc}</div>'
+            '</div>'
+        )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    section3_html = (
+        '<div class="card">'
+        '<h3 class="card-title">Tips Menjaga Kesehatan Saat Kualitas Udara Tidak Sehat <span class="info-icon">i</span></h3>'
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px;">'
+        + "".join(tip_cards)
+        + '</div>'
+        '</div>'
+    )
+    _render_html(section3_html)
 
     # ─── Footer banner hijau ────────────────────────────────────
-    st.markdown("""
-    <div class="green-banner">
-        <div class="green-banner-icon">🌿</div>
-        <div>
-            <h3>Jaga udara, jaga kesehatan, jaga Jakarta.</h3>
-            <p>Langkah kecil hari ini untuk udara yang lebih baik di masa depan.</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    banner_html = (
+        '<div class="green-banner">'
+        '<div class="green-banner-icon">🌿</div>'
+        '<div>'
+        '<h3>Jaga udara, jaga kesehatan, jaga Jakarta.</h3>'
+        '<p>Langkah kecil hari ini untuk udara yang lebih baik di masa depan.</p>'
+        '</div>'
+        '</div>'
+    )
+    _render_html(banner_html)
