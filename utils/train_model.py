@@ -138,7 +138,7 @@ def run_training(csv_path: str | Path, output_dir: str | Path) -> dict:
     joblib.dump(result["model"], output_dir / "model_xgboost.pkl")
     joblib.dump(result["encoder"], output_dir / "label_encoder.pkl")
     joblib.dump(FITUR_POLUTAN, output_dir / "fitur_polutan.pkl")
-    df_clean.to_parquet(output_dir / "ispu_2024_clean.parquet", index=False)
+    df_clean.to_pickle(output_dir / "ispu_2024_clean.pkl")
 
     metadata = {
         "test_accuracy": result["test_accuracy"],
