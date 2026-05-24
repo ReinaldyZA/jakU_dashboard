@@ -27,7 +27,7 @@ def _ensure_artifacts():
     needed = [
         DATA_DIR / "model_xgboost.pkl",
         DATA_DIR / "label_encoder.pkl",
-        DATA_DIR / "ispu_2024_clean.parquet",
+        DATA_DIR / "ispu_2024_clean.pkl",
         DATA_DIR / "metadata.json",
     ]
     if not all(f.exists() for f in needed):
@@ -56,7 +56,7 @@ def load_model_bundle():
 def load_data_2024() -> pd.DataFrame:
     """Load data 2024 yang sudah dibersihkan + tambahkan kolom tanggal & wilayah."""
     _ensure_artifacts()
-    df = pd.read_parquet(DATA_DIR / "ispu_2024_clean.parquet")
+    df = pd.read_pickle(DATA_DIR / "ispu_2024_clean.pkl")
 
     # Bangun kolom tanggal asli dari periode_data + tanggal
     df["tahun"] = df["periode_data"].astype(str).str[:4].astype(int)
