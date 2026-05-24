@@ -1,6 +1,11 @@
 """
 Komponen reusable: hero card, polutan grid, peta sederhana,
 chart helpers, rekomendasi cards.
+
+Semua HTML di-render via st.html() (Streamlit 1.33+) yang bypass
+markdown parser, sehingga indentasi & newline tidak diparse sebagai
+code block. SVG khusus pakai base64 img karena sanitizer Streamlit
+strip <svg> mentah.
 """
 from __future__ import annotations
 import base64
@@ -16,30 +21,37 @@ from utils.ispu_helper import (
 )
 
 
+# Fallback helper: pakai st.html jika ada, kalau tidak fallback ke markdown
+def _render_html(html: str):
+    if hasattr(st, "html"):
+        st.html(html)
+    else:
+        st.markdown(html, unsafe_allow_html=True)
+
+
+def _bulan_id(tanggal: date) -> str:
+    bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+             "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+    return f"{tanggal.day} {bulan[tanggal.month - 1]} {tanggal.year}"
+
+
 # ────────────────────────────────────────────────────────────
 # Page header
 # ────────────────────────────────────────────────────────────
 def render_page_header(title: str, subtitle: str, tanggal: date):
-    """Header standar tiap page dengan badge tanggal update."""
-    tgl_str = tanggal.strftime("%d %B %Y").replace(
-        "January", "Januari").replace("February", "Februari").replace(
-        "March", "Maret").replace("April", "April").replace(
-        "May", "Mei").replace("June", "Juni").replace(
-        "July", "Juli").replace("August", "Agustus").replace(
-        "September", "September").replace("October", "Oktober").replace(
-        "November", "November").replace("December", "Desember")
-
-    st.markdown(f"""
-    <div class="page-header">
-        <div>
-            <h1 class="page-title">{title}</h1>
-            <p class="page-subtitle">{subtitle}</p>
-        </div>
-        <div class="header-meta">
-            📅 Data terakhir diperbarui &nbsp;<b>{tgl_str}, 10:00 WIB</b>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    tgl_str = _bulan_id(tanggal)
+    html = (
+        '<div class="page-header">'
+        '<div>'
+        f'<h1 class="page-title">{title}</h1>'
+        f'<p class="page-subtitle">{subtitle}</p>'
+        '</div>'
+        '<div class="header-meta">'
+        f'📅 Data terakhir diperbarui &nbsp;<b>{tgl_str}, 10:00 WIB</b>'
+        '</div>'
+        '</div>'
+    )
+    _render_html(html)
 
 
 # ────────────────────────────────────────────────────────────
@@ -47,11 +59,9 @@ def render_page_header(title: str, subtitle: str, tanggal: date):
 # ────────────────────────────────────────────────────────────
 def render_hero_ispu(ispu: int, kategori: str, judul: str,
                       polutan_dominan: str, polutan_value: float | None = None):
-    """Card besar dengan angka ISPU & status."""
     warna = warna_kategori(kategori)
     desc = deskripsi_kategori(kategori)
 
-    # Polutan dominan label
     pol_label = polutan_dominan
     pol_value_txt = ""
     pol_key_map = {
@@ -65,32 +75,31 @@ def render_hero_ispu(ispu: int, kategori: str, judul: str,
         if polutan_value is not None:
             pol_value_txt = f"({polutan_value} {info['satuan']})"
 
-    st.markdown(f"""
-    <div class="card">
-        <h3 class="card-title">{judul} <span class="info-icon">i</span></h3>
-        <div class="ispu-hero">
-            <div>
-                <div class="ispu-number" style="color: {warna};">{ispu}</div>
-                <div class="ispu-label">ISPU</div>
-            </div>
-            <div style="flex: 1;">
-                <div class="ispu-status" style="color: {warna};">{kategori}</div>
-                <div class="ispu-subtext">{desc}</div>
-            </div>
-        </div>
-        <div class="ispu-dominant">
-            🌿 Polutan dominan: <b>{pol_label}</b> {pol_value_txt}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    html = (
+        '<div class="card">'
+        f'<h3 class="card-title">{judul} <span class="info-icon">i</span></h3>'
+        '<div class="ispu-hero">'
+        '<div>'
+        f'<div class="ispu-number" style="color: {warna};">{ispu}</div>'
+        '<div class="ispu-label">ISPU</div>'
+        '</div>'
+        '<div style="flex: 1;">'
+        f'<div class="ispu-status" style="color: {warna};">{kategori}</div>'
+        f'<div class="ispu-subtext">{desc}</div>'
+        '</div>'
+        '</div>'
+        '<div class="ispu-dominant">'
+        f'🌿 Polutan dominan: <b>{pol_label}</b> {pol_value_txt}'
+        '</div>'
+        '</div>'
+    )
+    _render_html(html)
 
 
 # ────────────────────────────────────────────────────────────
-# Peta Jakarta sederhana (SVG inline) + legenda
+# Peta Jakarta sederhana (SVG via base64 img) + legenda
 # ────────────────────────────────────────────────────────────
 def render_peta_jakarta(snapshot: dict):
-    """Render peta sederhana dengan warna per wilayah berdasarkan ISPU."""
-    # Posisi tetap untuk 6 wilayah dalam layout SVG 600×420
     wilayah_pos = {
         "Jakarta Barat":    {"cx": 175, "cy": 195, "rx": 110, "ry": 75, "rot": -8},
         "Jakarta Utara":    {"cx": 380, "cy": 110, "rx": 130, "ry": 60, "rot": -3},
@@ -100,9 +109,8 @@ def render_peta_jakarta(snapshot: dict):
         "Kep. Seribu":      {"cx": 90,  "cy": 70,  "rx": 36,  "ry": 26, "rot": 0},
     }
 
-    shapes_svg = ""
-    labels_svg = ""
-
+    shapes = []
+    labels = []
     for wilayah, pos in wilayah_pos.items():
         if wilayah not in snapshot:
             continue
@@ -112,84 +120,80 @@ def render_peta_jakarta(snapshot: dict):
         warna = warna_kategori(kategori)
         warna_bg = warna_kategori_bg(kategori)
 
-        # Ellipse berwarna
-        shapes_svg += f"""
-            <ellipse cx="{pos['cx']}" cy="{pos['cy']}"
-                rx="{pos['rx']}" ry="{pos['ry']}"
-                transform="rotate({pos['rot']} {pos['cx']} {pos['cy']})"
-                fill="{warna_bg}" stroke="{warna}" stroke-width="2" opacity="0.85"/>
-        """
+        shapes.append(
+            f'<ellipse cx="{pos["cx"]}" cy="{pos["cy"]}" '
+            f'rx="{pos["rx"]}" ry="{pos["ry"]}" '
+            f'transform="rotate({pos["rot"]} {pos["cx"]} {pos["cy"]})" '
+            f'fill="{warna_bg}" stroke="{warna}" stroke-width="2" opacity="0.85"/>'
+        )
 
-        # Label nama wilayah (di atas) + badge ISPU (di tengah)
-        nama_short = "Kep. Seribu" if wilayah == "Kep. Seribu" else wilayah
-        label_y_offset = -8
-        labels_svg += f"""
-            <text x="{pos['cx']}" y="{pos['cy']+label_y_offset}"
-                text-anchor="middle" font-size="11" font-weight="600"
-                fill="#334155" font-family="Inter,sans-serif">{nama_short}</text>
-            <rect x="{pos['cx']-22}" y="{pos['cy']+4}" width="44" height="22"
-                rx="6" fill="white" stroke="{warna}" stroke-width="1.5"/>
-            <text x="{pos['cx']}" y="{pos['cy']+19}"
-                text-anchor="middle" font-size="13" font-weight="800"
-                fill="{warna}" font-family="Plus Jakarta Sans,Inter,sans-serif">{ispu}</text>
-        """
+        labels.append(
+            f'<text x="{pos["cx"]}" y="{pos["cy"]-8}" '
+            f'text-anchor="middle" font-size="11" font-weight="600" '
+            f'fill="#334155" font-family="Inter,sans-serif">{wilayah}</text>'
+            f'<rect x="{pos["cx"]-22}" y="{pos["cy"]+4}" width="44" height="22" '
+            f'rx="6" fill="white" stroke="{warna}" stroke-width="1.5"/>'
+            f'<text x="{pos["cx"]}" y="{pos["cy"]+19}" '
+            f'text-anchor="middle" font-size="13" font-weight="800" '
+            f'fill="{warna}" font-family="Plus Jakarta Sans,Inter,sans-serif">{ispu}</text>'
+        )
 
-    svg = f"""
-    <svg viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg"
-        style="width:100%; height:auto; max-height:340px;">
-        <defs>
-            <pattern id="dots" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
-                <circle cx="2" cy="2" r="0.8" fill="#CBD5E1" opacity="0.4"/>
-            </pattern>
-        </defs>
-        <rect width="600" height="420" fill="url(#dots)" opacity="0.5"/>
-        {shapes_svg}
-        {labels_svg}
-    </svg>
-    """
+    svg = (
+        '<svg viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg" '
+        'style="width:100%;height:auto;max-height:340px;">'
+        '<defs>'
+        '<pattern id="dots" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">'
+        '<circle cx="2" cy="2" r="0.8" fill="#CBD5E1" opacity="0.4"/>'
+        '</pattern>'
+        '</defs>'
+        '<rect width="600" height="420" fill="url(#dots)" opacity="0.5"/>'
+        + "".join(shapes) + "".join(labels) +
+        '</svg>'
+    )
 
-    # Legenda
-    legenda_html = "<div style='display:flex; flex-direction:column; gap:10px; padding-top:8px;'>"
+    # Encode ke base64 supaya lolos sanitizer Streamlit
+    svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    img_html = (
+        f'<img src="data:image/svg+xml;base64,{svg_b64}" '
+        f'style="width:100%;height:auto;max-height:340px;display:block;" '
+        f'alt="Peta kualitas udara Jakarta">'
+    )
+
+    # Legenda: SINGLE-LINE HTML (no indentation, no newlines)
+    legenda_items = []
     for nama, lo, hi, _ in KATEGORI_RANGE:
         warna = warna_kategori(nama)
         range_label = f"{lo}-{hi}" if hi < 500 else f"≥{lo}"
-        legenda_html += f"""
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div style="width:14px; height:14px; border-radius:50%; background:{warna};"></div>
-            <span style="font-size:13px; color:#334155;">{nama} ({range_label})</span>
-        </div>
-        """
-    legenda_html += "</div>"
+        legenda_items.append(
+            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+            f'<div style="width:14px;height:14px;border-radius:50%;background:{warna};flex-shrink:0;"></div>'
+            f'<span style="font-size:13px;color:#334155;">{nama} ({range_label})</span>'
+            f'</div>'
+        )
+    legenda_html = (
+        '<div style="display:flex;flex-direction:column;padding-top:8px;">'
+        + "".join(legenda_items)
+        + '</div>'
+    )
 
-    # Container card
     col1, col2 = st.columns([3, 1.2])
     with col1:
-        # Encode SVG ke base64 dan tampilkan sebagai <img> agar lolos
-        # HTML sanitization Streamlit (yang strip <svg> tag mentah).
-        svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-        st.markdown(
-            f'<img src="data:image/svg+xml;base64,{svg_b64}" '
-            f'style="width:100%; height:auto; max-height:340px;" '
-            f'alt="Peta kualitas udara Jakarta">',
-            unsafe_allow_html=True,
-        )
+        _render_html(img_html)
     with col2:
-        st.markdown(legenda_html, unsafe_allow_html=True)
+        _render_html(legenda_html)
 
 
 # ────────────────────────────────────────────────────────────
 # Polutan grid (6 polutan dengan progress bar)
 # ────────────────────────────────────────────────────────────
 def render_polutan_grid(polutan_values: dict):
-    """Grid 6 polutan dengan nilai + bar relatif."""
-    # Threshold untuk warna bar (% terhadap nilai 'tinggi')
     thresholds = {
         "pm_duakomalima": 75, "pm_sepuluh": 100,
         "nitrogen_dioksida": 80, "sulfur_dioksida": 80,
         "karbon_monoksida": 10, "ozon": 100,
     }
 
-    chips_html = ""
+    chips = []
     for key in ["pm_duakomalima", "pm_sepuluh", "nitrogen_dioksida",
                 "sulfur_dioksida", "karbon_monoksida", "ozon"]:
         info = POLUTAN_INFO[key]
@@ -202,34 +206,33 @@ def render_polutan_grid(polutan_values: dict):
         elif pct < 100: bar_color = "#FACC15"
         else: bar_color = "#EF4444"
 
-        chips_html += f"""
-        <div class="pol-chip">
-            <div class="pol-name">{info['label']}</div>
-            <div class="pol-val">{val}</div>
-            <div class="pol-unit">{info['satuan']}</div>
-            <div class="pol-bar"><div style="width:{pct}%; background:{bar_color};"></div></div>
-        </div>
-        """
+        chips.append(
+            f'<div class="pol-chip">'
+            f'<div class="pol-name">{info["label"]}</div>'
+            f'<div class="pol-val">{val}</div>'
+            f'<div class="pol-unit">{info["satuan"]}</div>'
+            f'<div class="pol-bar"><div style="width:{pct}%;background:{bar_color};"></div></div>'
+            f'</div>'
+        )
 
-    st.markdown(f"""
-    <div class="card">
-        <h3 class="card-title">Komposisi Polutan <span class="info-icon">i</span></h3>
-        <div class="pol-grid">{chips_html}</div>
-        <div style="margin-top:18px; font-size:12px; color:#64748B;">
-            Tingkat konsentrasi setiap polutan terhadap baku mutu acuan.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    html = (
+        '<div class="card">'
+        '<h3 class="card-title">Komposisi Polutan <span class="info-icon">i</span></h3>'
+        '<div class="pol-grid">' + "".join(chips) + '</div>'
+        '<div style="margin-top:18px;font-size:12px;color:#64748B;">'
+        'Tingkat konsentrasi setiap polutan terhadap baku mutu acuan.'
+        '</div>'
+        '</div>'
+    )
+    _render_html(html)
 
 
 # ────────────────────────────────────────────────────────────
-# Chart: Tren ISPU 7 hari (line chart Plotly)
+# Chart: Tren ISPU 7 hari (line chart Plotly) — TIDAK BERUBAH
 # ────────────────────────────────────────────────────────────
 def build_chart_tren(df_tren: pd.DataFrame, judul: str, height: int = 280) -> go.Figure:
-    """Line chart tren ISPU dengan threshold lines."""
     fig = go.Figure()
 
-    # Threshold lines
     for nama, lo, hi, warna in KATEGORI_RANGE:
         if nama in ["Sangat Tidak Sehat", "Tidak Sehat", "Baik"] and hi < 250:
             fig.add_hline(
@@ -243,14 +246,12 @@ def build_chart_tren(df_tren: pd.DataFrame, judul: str, height: int = 280) -> go
         x=tanggal_labels, y=df_tren["ispu"],
         mode="lines+markers",
         line=dict(color="#2563EB", width=2.5, shape="spline", smoothing=0.6),
-        marker=dict(size=8, color="#2563EB",
-                    line=dict(width=2, color="white")),
+        marker=dict(size=8, color="#2563EB", line=dict(width=2, color="white")),
         fill="tozeroy", fillcolor="rgba(37, 99, 235, 0.08)",
         hovertemplate="<b>%{x}</b><br>ISPU: %{y}<extra></extra>",
         name="ISPU",
     ))
 
-    # Highlight last value
     last_idx = len(df_tren) - 1
     fig.add_annotation(
         x=tanggal_labels.iloc[last_idx], y=df_tren["ispu"].iloc[last_idx],
@@ -275,10 +276,9 @@ def build_chart_tren(df_tren: pd.DataFrame, judul: str, height: int = 280) -> go
 
 
 # ────────────────────────────────────────────────────────────
-# Chart: Pola Harian (24 jam)
+# Chart: Pola Harian (24 jam) — TIDAK BERUBAH
 # ────────────────────────────────────────────────────────────
 def build_chart_pola_harian(df_pola: pd.DataFrame, height: int = 280) -> go.Figure:
-    """Area chart pola 24 jam dengan annotation 'Puncak Polusi'."""
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df_pola["jam"], y=df_pola["ispu"],
@@ -289,7 +289,6 @@ def build_chart_pola_harian(df_pola: pd.DataFrame, height: int = 280) -> go.Figu
         hovertemplate="<b>%{x}</b><br>ISPU: %{y}<extra></extra>",
     ))
 
-    # Annotation puncak
     idx_max = df_pola["ispu"].idxmax()
     fig.add_annotation(
         x=df_pola["jam"].iloc[idx_max], y=df_pola["ispu"].iloc[idx_max],
@@ -329,52 +328,50 @@ def render_rekomendasi(kategori: str):
     for col, (key, emoji, judul, bg) in zip(cols, items):
         status, warna, deskripsi = rek[key]
         with col:
-            st.markdown(f"""
-            <div class="rec-card">
-                <div class="rec-icon" style="background:{bg};">{emoji}</div>
-                <div class="rec-content">
-                    <h4>{judul}</h4>
-                    <div class="rec-status" style="color:{warna};">{status}</div>
-                    <p class="rec-desc">{deskripsi}</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            html = (
+                '<div class="rec-card">'
+                f'<div class="rec-icon" style="background:{bg};">{emoji}</div>'
+                '<div class="rec-content">'
+                f'<h4>{judul}</h4>'
+                f'<div class="rec-status" style="color:{warna};">{status}</div>'
+                f'<p class="rec-desc">{deskripsi}</p>'
+                '</div>'
+                '</div>'
+            )
+            _render_html(html)
 
 
 # ────────────────────────────────────────────────────────────
 # Sidebar info card
 # ────────────────────────────────────────────────────────────
 def render_sidebar_info(tanggal_acuan: date):
-    tgl_str = tanggal_acuan.strftime("%d %B %Y")
-    bln = {"January": "Januari", "February": "Februari", "March": "Maret",
-           "April": "April", "May": "Mei", "June": "Juni", "July": "Juli",
-           "August": "Agustus", "September": "September", "October": "Oktober",
-           "November": "November", "December": "Desember"}
-    for en, idn in bln.items():
-        tgl_str = tgl_str.replace(en, idn)
-
-    st.sidebar.markdown(f"""
-    <div class="sidebar-info-card">
-        <h4>📌 Data tidak realtime</h4>
-        <p>Data berasal dari sampel ISPU tahun 2024 dan diperbarui secara berkala.</p>
-        <div class="updated">
-            Data terakhir diperbarui
-            <b>{tgl_str}, 10:00 WIB</b>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    tgl_str = _bulan_id(tanggal_acuan)
+    html = (
+        '<div class="sidebar-info-card">'
+        '<h4>📌 Data tidak realtime</h4>'
+        '<p>Data berasal dari sampel ISPU tahun 2024 dan diperbarui secara berkala.</p>'
+        '<div class="updated">'
+        'Data terakhir diperbarui'
+        f'<b>{tgl_str}, 10:00 WIB</b>'
+        '</div>'
+        '</div>'
+    )
+    with st.sidebar:
+        _render_html(html)
 
 
 # ────────────────────────────────────────────────────────────
 # Sidebar logo
 # ────────────────────────────────────────────────────────────
 def render_sidebar_logo():
-    st.sidebar.markdown("""
-    <div class="sidebar-logo">
-        <div class="sidebar-logo-icon">U</div>
-        <div class="sidebar-logo-text">
-            <h1>JakU</h1>
-            <p>Pantau Udara, Jaga Jakarta</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    html = (
+        '<div class="sidebar-logo">'
+        '<div class="sidebar-logo-icon">U</div>'
+        '<div class="sidebar-logo-text">'
+        '<h1>JakU</h1>'
+        '<p>Pantau Udara, Jaga Jakarta</p>'
+        '</div>'
+        '</div>'
+    )
+    with st.sidebar:
+        _render_html(html)
