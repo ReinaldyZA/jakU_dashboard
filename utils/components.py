@@ -165,22 +165,29 @@ def render_peta_jakarta(snapshot: dict):
         warna = warna_kategori(nama)
         range_label = f"{lo}-{hi}" if hi < 500 else f"≥{lo}"
         legenda_items.append(
-            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'
             f'<div style="width:14px;height:14px;border-radius:50%;background:{warna};flex-shrink:0;"></div>'
             f'<span style="font-size:13px;color:#334155;">{nama} ({range_label})</span>'
             f'</div>'
         )
-    legenda_html = (
-        '<div style="display:flex;flex-direction:column;padding-top:8px;">'
-        + "".join(legenda_items)
-        + '</div>'
-    )
+    legenda_html = "".join(legenda_items)
 
-    col1, col2 = st.columns([3, 1.2])
-    with col1:
-        _render_html(img_html)
-    with col2:
-        _render_html(legenda_html)
+    # Bangun SATU HTML block lengkap: card + title + flex layout (peta | legenda)
+    # Tidak pakai st.columns supaya tidak konflik dengan element ordering Streamlit
+    full_html = (
+        '<div class="card">'
+        '<h3 class="card-title">Kualitas Udara per Wilayah <span class="info-icon">i</span></h3>'
+        '<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">'
+        '<div style="flex:3;min-width:280px;">'
+        + img_html +
+        '</div>'
+        '<div style="flex:1;min-width:160px;padding-top:8px;">'
+        + legenda_html +
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    _render_html(full_html)
 
 
 # ────────────────────────────────────────────────────────────
